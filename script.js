@@ -1,32 +1,33 @@
-const jobForm = document.getElementById("jobForm");
-const companyInput = document.getElementById("companyInput");
+const bugForm = document.getElementById("bugForm");
+const projectInput = document.getElementById("projectInput");
 const titleInput = document.getElementById("titleInput");
-const linkInput = document.getElementById("linkInput");
+const priorityInput = document.getElementById("priorityInput");
 const statusInput = document.getElementById("statusInput");
 const dateInput = document.getElementById("dateInput");
 const notesInput = document.getElementById("notesInput");
 
-const applicationsList = document.getElementById("applicationsList");
+const issuesList = document.getElementById("issuesList");
 const emptyState = document.getElementById("emptyState");
 const listMessage = document.getElementById("listMessage");
 
 const searchInput = document.getElementById("searchInput");
 const filterStatus = document.getElementById("filterStatus");
+const filterPriority = document.getElementById("filterPriority");
 const clearAllButton = document.getElementById("clearAllButton");
 const themeSelect = document.getElementById("themeSelect");
 
 const totalCount = document.getElementById("totalCount");
-const appliedCount = document.getElementById("appliedCount");
-const interviewCount = document.getElementById("interviewCount");
-const offerCount = document.getElementById("offerCount");
+const openCount = document.getElementById("openCount");
+const progressCount = document.getElementById("progressCount");
+const fixedCount = document.getElementById("fixedCount");
 
-let applications = JSON.parse(localStorage.getItem("remoteJobApplications")) || [];
+let issues = JSON.parse(localStorage.getItem("bugFlowIssues")) || [];
 
 const themeClasses = [
   "theme-clean",
   "theme-terminal",
   "theme-focus",
-  "theme-corporate",
+  "theme-cyber",
   "theme-warm"
 ];
 
@@ -34,189 +35,297 @@ themeSelect.addEventListener("change", function () {
   applyTheme(themeSelect.value);
 });
 
-jobForm.addEventListener("submit", function (event) {
+bugForm.addEventListener("submit", function (event) {
   event.preventDefault();
 
-  const company = companyInput.value.trim();
+  const project = projectInput.value.trim();
   const title = titleInput.value.trim();
-  const link = linkInput.value.trim();
+  const priority = priorityInput.value;
   const status = statusInput.value;
   const date = dateInput.value;
   const notes = notesInput.value.trim();
 
-  if (company === "" || title === "") {
+  if (project === "" || title === "") {
     return;
   }
 
-  const application = {
+  const issue = {
     id: Date.now(),
-    company: company,
+    project: project,
     title: title,
-    link: link,
+    priority: priority,
     status: status,
     date: date,
     notes: notes
   };
 
-  applications.unshift(application);
-  saveApplications();
-  renderApplications();
-  jobForm.reset();
-  statusInput.value = "Saved";
+  issues.unshift(issue);
+  saveIssues();
+  renderIssues();
+
+  bugForm.reset();
+  priorityInput.value = "Medium";
+  statusInput.value = "Open";
+  setTodayDate();
 });
 
 searchInput.addEventListener("input", function () {
-  renderApplications();
+  renderIssues();
 });
 
 filterStatus.addEventListener("change", function () {
-  renderApplications();
+  renderIssues();
+});
+
+filterPriority.addEventListener("change", function () {
+  renderIssues();
 });
 
 clearAllButton.addEventListener("click", function () {
-  if (applications.length === 0) {
+  if (issues.length === 0) {
     return;
   }
 
-  const confirmClear = confirm("Clear all saved job applications?");
+  const confirmClear = confirm("Clear all saved bugs and issues?");
 
   if (confirmClear) {
-    applications = [];
-    saveApplications();
-    renderApplications();
+    issues = [];
+    saveIssues();
+    renderIssues();
   }
 });
 
-applicationsList.addEventListener("click", function (event) {
+issuesList.addEventListener("click", function (event) {
   if (event.target.classList.contains("delete-button")) {
     const id = Number(event.target.dataset.id);
 
-    applications = applications.filter(function (application) {
-      return application.id !== id;
+    issues = issues.filter(function (issue) {
+      return issue.id !== id;
     });
 
-    saveApplications();
-    renderApplications();
+    saveIssues();
+    renderIssues();
   }
 });
 
-applicationsList.addEventListener("change", function (event) {
+issuesList.addEventListener("change", function (event) {
+  const id = Number(event.target.dataset.id);
+
   if (event.target.classList.contains("status-select")) {
-    const id = Number(event.target.dataset.id);
     const newStatus = event.target.value;
 
-    applications = applications.map(function (application) {
-      if (application.id === id) {
+    issues = issues.map(function (issue) {
+      if (issue.id === id) {
         return {
-          ...application,
+          ...issue,
           status: newStatus
         };
       }
 
-      return application;
+      return issue;
     });
 
-    saveApplications();
-    renderApplications();
+    saveIssues();
+    renderIssues();
+  }
+
+  if (event.target.classList.contains("priority-select")) {
+    const newPriority = event.target.value;
+
+    issues = issues.map(function (issue) {
+      if (issue.id === id) {
+        return {
+          ...issue,
+          priority: newPriority
+        };
+      }
+
+      return issue;
+    });
+
+    saveIssues();
+    renderIssues();
   }
 });
 
 function applyTheme(theme) {
   document.body.classList.remove(...themeClasses);
   document.body.classList.add(`theme-${theme}`);
-  localStorage.setItem("selectedJobTrackerTheme", theme);
+  localStorage.setItem("selectedBugFlowTheme", theme);
 }
 
-function saveApplications() {
-  localStorage.setItem("remoteJobApplications", JSON.stringify(applications));
+function saveIssues() {
+  localStorage.setItem("bugFlowIssues", JSON.stringify(issues));
 }
 
-function renderApplications() {
-  applicationsList.innerHTML = "";
+function renderIssues() {
+  issuesList.innerHTML = "";
 
   const searchText = searchInput.value.toLowerCase().trim();
   const selectedStatus = filterStatus.value;
+  const selectedPriority = filterPriority.value;
 
-  const filteredApplications = applications.filter(function (application) {
+  const filteredIssues = issues.filter(function (issue) {
     const matchesSearch =
-      application.company.toLowerCase().includes(searchText) ||
-      application.title.toLowerCase().includes(searchText);
+      issue.project.toLowerCase().includes(searchText) ||
+      issue.title.toLowerCase().includes(searchText);
 
     const matchesStatus =
-      selectedStatus === "All" || application.status === selectedStatus;
+      selectedStatus === "All" || issue.status === selectedStatus;
 
-    return matchesSearch && matchesStatus;
+    const matchesPriority =
+      selectedPriority === "All" || issue.priority === selectedPriority;
+
+    return matchesSearch && matchesStatus && matchesPriority;
   });
 
   updateStats();
 
-  listMessage.textContent = `${filteredApplications.length} showing`;
+  listMessage.textContent = `${filteredIssues.length} showing`;
 
-  if (filteredApplications.length === 0) {
+  if (filteredIssues.length === 0) {
     emptyState.classList.remove("hidden");
     return;
   }
 
   emptyState.classList.add("hidden");
 
-  filteredApplications.forEach(function (application) {
-    const card = document.createElement("article");
-    card.className = "application-card";
-
-    const safeLink = application.link || "";
-
-    card.innerHTML = `
-      <div class="application-top">
-        <div>
-          <h3>${application.title}</h3>
-          <p class="company">${application.company}</p>
-        </div>
-
-        <span class="status-badge">${application.status}</span>
-      </div>
-
-      <div class="application-meta">
-        <p><strong>Date:</strong> ${formatDate(application.date)}</p>
-        <p><strong>Notes:</strong> ${application.notes || "No notes added"}</p>
-      </div>
-
-      <div class="application-actions">
-        <select class="status-select" data-id="${application.id}">
-          <option value="Saved" ${application.status === "Saved" ? "selected" : ""}>Saved</option>
-          <option value="Applied" ${application.status === "Applied" ? "selected" : ""}>Applied</option>
-          <option value="Interview" ${application.status === "Interview" ? "selected" : ""}>Interview</option>
-          <option value="Offer" ${application.status === "Offer" ? "selected" : ""}>Offer</option>
-          <option value="Rejected" ${application.status === "Rejected" ? "selected" : ""}>Rejected</option>
-        </select>
-
-        ${
-          safeLink
-            ? `<a class="visit-button" href="${safeLink}" target="_blank">Open Job</a>`
-            : `<span></span>`
-        }
-
-        <button class="delete-button" data-id="${application.id}" type="button">Delete</button>
-      </div>
-    `;
-
-    applicationsList.appendChild(card);
+  filteredIssues.forEach(function (issue) {
+    const card = createIssueCard(issue);
+    issuesList.appendChild(card);
   });
 }
 
+function createIssueCard(issue) {
+  const card = document.createElement("article");
+  card.className = "issue-card";
+
+  const top = document.createElement("div");
+  top.className = "issue-top";
+
+  const titleBlock = document.createElement("div");
+
+  const title = document.createElement("h3");
+  title.textContent = issue.title;
+
+  const project = document.createElement("p");
+  project.className = "project-name";
+  project.textContent = issue.project;
+
+  titleBlock.appendChild(title);
+  titleBlock.appendChild(project);
+
+  const badges = document.createElement("div");
+  badges.className = "badges";
+
+  const statusBadge = document.createElement("span");
+  statusBadge.className = "badge";
+  statusBadge.textContent = issue.status;
+
+  const priorityBadge = document.createElement("span");
+  priorityBadge.className = `badge ${getPriorityClass(issue.priority)}`;
+  priorityBadge.textContent = issue.priority;
+
+  badges.appendChild(statusBadge);
+  badges.appendChild(priorityBadge);
+
+  top.appendChild(titleBlock);
+  top.appendChild(badges);
+
+  const meta = document.createElement("div");
+  meta.className = "issue-meta";
+
+  const date = document.createElement("p");
+  date.innerHTML = `<strong>Date Found:</strong> ${formatDate(issue.date)}`;
+
+  const notes = document.createElement("p");
+  notes.innerHTML = `<strong>Notes:</strong> ${issue.notes || "No notes added"}`;
+
+  meta.appendChild(date);
+  meta.appendChild(notes);
+
+  const actions = document.createElement("div");
+  actions.className = "issue-actions";
+
+  const statusSelect = document.createElement("select");
+  statusSelect.className = "status-select";
+  statusSelect.dataset.id = issue.id;
+
+  ["Backlog", "Open", "In Progress", "Testing", "Fixed", "Closed"].forEach(function (status) {
+    const option = document.createElement("option");
+    option.value = status;
+    option.textContent = status;
+
+    if (issue.status === status) {
+      option.selected = true;
+    }
+
+    statusSelect.appendChild(option);
+  });
+
+  const prioritySelect = document.createElement("select");
+  prioritySelect.className = "priority-select";
+  prioritySelect.dataset.id = issue.id;
+
+  ["Low", "Medium", "High", "Critical"].forEach(function (priority) {
+    const option = document.createElement("option");
+    option.value = priority;
+    option.textContent = priority;
+
+    if (issue.priority === priority) {
+      option.selected = true;
+    }
+
+    prioritySelect.appendChild(option);
+  });
+
+  const deleteButton = document.createElement("button");
+  deleteButton.className = "delete-button";
+  deleteButton.dataset.id = issue.id;
+  deleteButton.type = "button";
+  deleteButton.textContent = "Delete";
+
+  actions.appendChild(statusSelect);
+  actions.appendChild(prioritySelect);
+  actions.appendChild(deleteButton);
+
+  card.appendChild(top);
+  card.appendChild(meta);
+  card.appendChild(actions);
+
+  return card;
+}
+
 function updateStats() {
-  totalCount.textContent = applications.length;
+  totalCount.textContent = issues.length;
 
-  appliedCount.textContent = applications.filter(function (application) {
-    return application.status === "Applied";
+  openCount.textContent = issues.filter(function (issue) {
+    return issue.status === "Open";
   }).length;
 
-  interviewCount.textContent = applications.filter(function (application) {
-    return application.status === "Interview";
+  progressCount.textContent = issues.filter(function (issue) {
+    return issue.status === "In Progress";
   }).length;
 
-  offerCount.textContent = applications.filter(function (application) {
-    return application.status === "Offer";
+  fixedCount.textContent = issues.filter(function (issue) {
+    return issue.status === "Fixed" || issue.status === "Closed";
   }).length;
+}
+
+function getPriorityClass(priority) {
+  if (priority === "Critical") {
+    return "priority-critical";
+  }
+
+  if (priority === "High") {
+    return "priority-high";
+  }
+
+  if (priority === "Medium") {
+    return "priority-medium";
+  }
+
+  return "priority-low";
 }
 
 function formatDate(dateString) {
@@ -233,8 +342,14 @@ function formatDate(dateString) {
   });
 }
 
-const savedTheme = localStorage.getItem("selectedJobTrackerTheme") || "clean";
+function setTodayDate() {
+  const today = new Date().toISOString().split("T")[0];
+  dateInput.value = today;
+}
+
+const savedTheme = localStorage.getItem("selectedBugFlowTheme") || "clean";
 themeSelect.value = savedTheme;
 applyTheme(savedTheme);
 
-renderApplications();
+setTodayDate();
+renderIssues();
