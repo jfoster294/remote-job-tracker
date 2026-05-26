@@ -233,6 +233,7 @@ let activeTicketId = null;
 
 const app = document.querySelector(".app");
 const navMenu = document.querySelector(".nav-menu");
+
 const searchInput = document.getElementById("searchInput");
 const priorityFilter = document.getElementById("priorityFilter");
 const statusFilter = document.getElementById("statusFilter");
@@ -503,6 +504,7 @@ function renderApp() {
   renderActivities();
   renderAdminPanel();
   prepareFormForRole();
+  updateRoleControls();
 }
 
 function renderLayout() {
@@ -520,7 +522,7 @@ function renderLayout() {
   resetButton.style.display = currentUser.role === "admin" ? "inline-flex" : "none";
 
   if (panelActions) {
-    panelActions.style.display = currentUser.role === "requester" && currentView === "submit" ? "none" : "flex";
+    panelActions.style.display = "flex";
   }
 
   if (searchInput) {
@@ -1105,7 +1107,10 @@ function closeTicketModal() {
   activeTicketId = null;
 
   const modal = document.getElementById("ticketModal");
-  modal.classList.remove("show");
+
+  if (modal) {
+    modal.classList.remove("show");
+  }
 }
 
 function renderTicketModal() {
@@ -1532,10 +1537,6 @@ function getDefaultView(role) {
     return "submit";
   }
 
-  if (role === "admin") {
-    return "dashboard";
-  }
-
   return "dashboard";
 }
 
@@ -1578,61 +1579,63 @@ function showApp() {
 }
 
 function ensureLoginScreen() {
-  if (document.getElementById("loginScreen")) {
-    return;
-  }
+  let loginScreen = document.getElementById("loginScreen");
 
-  const loginScreen = document.createElement("section");
-  loginScreen.id = "loginScreen";
-  loginScreen.className = "login-screen";
+  if (!loginScreen) {
+    loginScreen = document.createElement("section");
+    loginScreen.id = "loginScreen";
+    loginScreen.className = "login-screen";
 
-  loginScreen.innerHTML = `
-    <div class="login-card">
-      <div class="brand login-brand">
-        <div class="brand-icon">⌘</div>
-        <div>
-          <h1>BugFlow OS</h1>
-          <p>Role-Based IT Ticket System</p>
+    loginScreen.innerHTML = `
+      <div class="login-card">
+        <div class="brand login-brand">
+          <div class="brand-icon">⌘</div>
+          <div>
+            <h1>BugFlow OS</h1>
+            <p>Role-Based IT Ticket System</p>
+          </div>
         </div>
-      </div>
 
-      <div class="login-copy">
-        <p class="eyebrow">Demo Login</p>
-        <h2>Choose Your Portal</h2>
-        <p>
-          This portfolio demo uses role-based access so each person gets a different experience.
+        <div class="login-copy">
+          <p class="eyebrow">Demo Login</p>
+          <h2>Choose Your Portal</h2>
+          <p>
+            This portfolio demo uses role-based access so each person gets a different experience.
+          </p>
+        </div>
+
+        <div class="role-grid">
+          <button class="role-card" data-login-role="requester" type="button">
+            <span class="role-icon">＋</span>
+            <strong>User Portal</strong>
+            <small>Submit an IT ticket and track your own requests.</small>
+          </button>
+
+          <button class="role-card" data-login-role="staff" type="button">
+            <span class="role-icon">☷</span>
+            <strong>IT Staff Portal</strong>
+            <small>View the queue, claim tickets, update status, and add notes.</small>
+          </button>
+
+          <button class="role-card" data-login-role="admin" type="button">
+            <span class="role-icon">◎</span>
+            <strong>Admin Command Center</strong>
+            <small>Assign tickets, manage personnel, and monitor workload.</small>
+          </button>
+        </div>
+
+        <p class="demo-note">
+          Demo authentication for portfolio use only. No real passwords or backend are connected.
         </p>
       </div>
+    `;
 
-      <div class="role-grid">
-        <button class="role-card" data-login-role="requester" type="button">
-          <span class="role-icon">＋</span>
-          <strong>User Portal</strong>
-          <small>Submit an IT ticket and track your own requests.</small>
-        </button>
+    document.body.prepend(loginScreen);
+  }
 
-        <button class="role-card" data-login-role="staff" type="button">
-          <span class="role-icon">☷</span>
-          <strong>IT Staff Portal</strong>
-          <small>View the queue, claim tickets, update status, and add notes.</small>
-        </button>
+  const demoButtons = loginScreen.querySelectorAll("[data-login-role]");
 
-        <button class="role-card" data-login-role="admin" type="button">
-          <span class="role-icon">◎</span>
-          <strong>Admin Command Center</strong>
-          <small>Assign tickets, manage personnel, and monitor workload.</small>
-        </button>
-      </div>
-
-      <p class="demo-note">
-        Demo authentication for portfolio use only. No real passwords or backend are connected.
-      </p>
-    </div>
-  `;
-
-  document.body.prepend(loginScreen);
-
-  loginScreen.querySelectorAll("[data-login-role]").forEach((button) => {
+  demoButtons.forEach((button) => {
     button.addEventListener("click", () => {
       loginAs(button.dataset.loginRole);
     });
@@ -1667,9 +1670,6 @@ function ensureRoleControls() {
   topbar.appendChild(roleControls);
 
   document.getElementById("logoutButton").addEventListener("click", logout);
-
-  const observer = new MutationObserver(updateRoleControls);
-  observer.observe(document.body, { childList: true, subtree: true });
 
   updateRoleControls();
 }
@@ -1764,7 +1764,10 @@ function injectExtraStyles() {
       background:
         radial-gradient(circle at top left, rgba(88, 255, 77, 0.13), transparent 28%),
         radial-gradient(circle at top right, rgba(48, 242, 255, 0.08), transparent 30%),
+        linear-gradient(rgba(88, 255, 77, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(88, 255, 77, 0.025) 1px, transparent 1px),
         var(--bg);
+      background-size: auto, auto, 42px 42px, 42px 42px, auto;
     }
 
     .login-card {
