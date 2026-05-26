@@ -71,6 +71,108 @@ button {
   cursor: pointer;
 }
 
+.hidden {
+  display: none !important;
+}
+
+.login-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.login-card {
+  width: min(920px, 100%);
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  padding: 28px;
+  background:
+    linear-gradient(180deg, rgba(88, 255, 77, 0.08), rgba(0, 0, 0, 0.24)),
+    rgba(3, 10, 10, 0.94);
+  box-shadow: var(--shadow);
+}
+
+.login-brand {
+  border-bottom: 1px solid var(--border-soft);
+  padding-bottom: 20px;
+  margin-bottom: 22px;
+}
+
+.login-copy {
+  max-width: 680px;
+  margin-bottom: 22px;
+}
+
+.login-copy h2 {
+  margin: 6px 0 10px;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  color: var(--text);
+}
+
+.login-copy p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.role-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.role-card {
+  min-height: 190px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: left;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.035);
+  transition: 0.2s ease;
+}
+
+.role-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--green);
+  background: var(--green-soft);
+  box-shadow: 0 0 22px rgba(88, 255, 77, 0.16);
+}
+
+.role-icon {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--green);
+  border-radius: 14px;
+  margin-bottom: 18px;
+  color: var(--green);
+  background: var(--green-soft);
+}
+
+.role-card strong {
+  display: block;
+  font-size: 1.2rem;
+  margin-bottom: 8px;
+}
+
+.role-card small {
+  display: block;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.admin-role {
+  border-color: rgba(255, 200, 87, 0.24);
+}
+
+.demo-note {
+  margin-top: 18px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .app {
   min-height: 100vh;
   display: grid;
@@ -125,6 +227,34 @@ button {
   letter-spacing: 0.1em;
 }
 
+.user-card {
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  padding: 14px;
+  margin-bottom: 16px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.user-card strong {
+  display: block;
+  margin: 6px 0 4px;
+  font-size: 1rem;
+}
+
+.user-card span {
+  display: block;
+  color: var(--green);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.small-button {
+  width: 100%;
+  margin-top: 12px;
+  padding: 9px 11px;
+  font-size: 0.8rem;
+}
+
 .nav-menu {
   display: grid;
   gap: 8px;
@@ -163,7 +293,7 @@ button {
 }
 
 .visibility-card {
-  margin: 0 0 6px 34px;
+  margin-top: 18px;
   border: 1px solid var(--green);
   border-radius: 14px;
   padding: 12px;
@@ -190,7 +320,7 @@ button {
 }
 
 .console-card {
-  margin-top: 28px;
+  margin-top: 18px;
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 16px;
@@ -433,7 +563,8 @@ input::placeholder {
 
 .tickets-panel,
 .side-panel,
-.submit-panel {
+.submit-panel,
+.personnel-panel {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--panel);
@@ -482,7 +613,8 @@ input::placeholder {
 .panel-actions select,
 .form-group select,
 .form-group input,
-.form-group textarea {
+.form-group textarea,
+.assign-select {
   border: 1px solid var(--border-soft);
   border-radius: 12px;
   padding: 12px;
@@ -494,9 +626,16 @@ input::placeholder {
 .panel-actions select:focus,
 .form-group select:focus,
 .form-group input:focus,
-.form-group textarea:focus {
+.form-group textarea:focus,
+.assign-select:focus {
   border-color: var(--green);
   box-shadow: 0 0 0 3px rgba(88, 255, 77, 0.08);
+}
+
+.assign-select {
+  width: 160px;
+  padding: 8px 10px;
+  font-size: 0.82rem;
 }
 
 .table-wrap {
@@ -535,7 +674,7 @@ td {
 }
 
 .ticket-title {
-  max-width: 230px;
+  max-width: 260px;
 }
 
 .ticket-title strong {
@@ -547,6 +686,11 @@ td {
   display: block;
   color: var(--muted);
   line-height: 1.4;
+}
+
+.latest-note {
+  margin-top: 8px;
+  color: #b8f7b2 !important;
 }
 
 .badge {
@@ -588,6 +732,7 @@ td {
 .action-row {
   display: flex;
   gap: 7px;
+  flex-wrap: wrap;
 }
 
 .icon-button {
@@ -603,8 +748,20 @@ td {
   color: var(--green);
 }
 
+.delete-button:hover {
+  border-color: var(--red);
+  color: var(--red);
+}
+
 .count-text {
   padding: 16px 20px;
+}
+
+.empty-row {
+  padding: 34px;
+  text-align: center;
+  color: var(--muted);
+  font-weight: 800;
 }
 
 .right-column {
@@ -696,15 +853,21 @@ td {
 }
 
 .submit-panel {
-  margin-top: 18px;
   overflow: hidden;
 }
 
-.ticket-form {
+.ticket-form,
+.personnel-form {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 14px;
   padding: 20px;
+}
+
+.personnel-form {
+  grid-template-columns: 1.5fr 1fr 1fr auto;
+  align-items: end;
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .form-group {
@@ -743,6 +906,47 @@ td {
   font-size: 0.86rem;
 }
 
+.personnel-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 18px;
+  padding: 20px;
+}
+
+.knowledge-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.knowledge-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.knowledge-card span {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  border: 1px solid var(--green);
+  background: var(--green-soft);
+  margin-bottom: 16px;
+}
+
+.knowledge-card h3 {
+  margin-bottom: 8px;
+}
+
+.knowledge-card p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .toast {
   position: fixed;
   right: 22px;
@@ -774,7 +978,8 @@ td {
     grid-template-columns: repeat(3, 1fr);
   }
 
-  .dashboard-grid {
+  .dashboard-grid,
+  .personnel-grid {
     grid-template-columns: 1fr;
   }
 
@@ -782,12 +987,17 @@ td {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .ticket-form {
+  .ticket-form,
+  .personnel-form {
     grid-template-columns: repeat(2, 1fr);
   }
 
   .form-group.wide {
     grid-column: span 2;
+  }
+
+  .knowledge-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
@@ -808,8 +1018,23 @@ td {
   .topbar,
   .stats-grid,
   .right-column,
-  .ticket-form {
+  .ticket-form,
+  .personnel-form,
+  .knowledge-grid,
+  .role-grid {
     grid-template-columns: 1fr;
+  }
+
+  .nav-menu {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .nav-link {
+    font-size: 0.86rem;
+  }
+
+  .console-card {
+    display: none;
   }
 
   .form-group.wide {
@@ -826,5 +1051,10 @@ td {
   .primary-button,
   .ghost-button {
     width: 100%;
+  }
+
+  .team-pill,
+  .status-pill {
+    display: none;
   }
 }
