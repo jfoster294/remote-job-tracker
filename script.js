@@ -270,28 +270,46 @@ const topbarTitle = document.querySelector(".topbar h2");
 const teamPillSmall = document.querySelector(".team-pill small");
 const visibilityCard = document.querySelector(".visibility-card");
 
-injectExtraStyles();
-ensureAdminNavButton();
-ensureAdminSection();
-ensureTicketModal();
-ensureLoginScreen();
-ensureRoleControls();
+safeStart();
 
-let navLinks = document.querySelectorAll(".nav-link");
+function safeStart() {
+  try {
+    injectExtraStyles();
+    ensureLoginScreen();
+    ensureAdminNavButton();
+    ensureAdminSection();
+    ensureTicketModal();
+    ensureRoleControls();
+    setupEventListeners();
 
-setupEventListeners();
+    if (!currentUser || !demoAccounts[currentUser.role]) {
+      currentUser = null;
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+      showLogin();
+      return;
+    }
 
-if (currentUser) {
-  showApp();
-  renderApp();
-} else {
-  showLogin();
+    showApp();
+    renderApp();
+  } catch (error) {
+    console.error("BugFlow OS failed to start:", error);
+    forceRecoveryScreen();
+  }
 }
 
 function setupEventListeners() {
-  navLinks.forEach((link) => {
-    link.addEventListener("click", () => {
-      const requestedView = link.dataset.view;
+  document.addEventListener("click", (event) => {
+    const loginButton = event.target.closest("[data-login-role]");
+
+    if (loginButton) {
+      loginAs(loginButton.dataset.loginRole);
+      return;
+    }
+
+    const navButton = event.target.closest(".nav-link");
+
+    if (navButton && navButton.dataset.view) {
+      const requestedView = navButton.dataset.view;
 
       if (!canAccessView(requestedView)) {
         showToast("That view is not available for this login role.");
@@ -299,227 +317,225 @@ function setupEventListeners() {
       }
 
       currentView = requestedView;
-      setActiveNav(currentView);
       renderApp();
 
-      if (currentView === "submit") {
-        document.getElementById("titleInput").focus();
+      const titleInput = document.getElementById("titleInput");
+
+      if (currentView === "submit" && titleInput) {
+        titleInput.focus();
+      }
+
+      return;
+    }
+
+    const ticketButton = event.target.closest("#ticketTableBody button");
+
+    if (ticketButton) {
+      handleTicketAction(ticketButton);
+      return;
+    }
+
+    const quickButton = event.target.closest(".quick-button");
+
+    if (quickButton) {
+      loadQuickAction(quickButton.dataset.quick);
+      return;
+    }
+
+    const logoutButton = event.target.closest("#logoutButton");
+
+    if (logoutButton) {
+      logout();
+      return;
+    }
+
+    const closeModalButton = event.target.closest("#closeTicketModal");
+
+    if (closeModalButton) {
+      closeTicketModal();
+      return;
+    }
+
+    const addNoteButton = event.target.closest("#addTicketNoteButton");
+
+    if (addNoteButton) {
+      addTicketNote();
+      return;
+    }
+
+    const adminBackButton = event.target.closest("#adminBackButton");
+
+    if (adminBackButton) {
+      currentView = "dashboard";
+      renderApp();
+      return;
+    }
+
+    const removePersonnelButton = event.target.closest("[data-remove-personnel]");
+
+    if (removePersonnelButton) {
+      removePersonnel(removePersonnelButton.dataset.removePersonnel);
+      return;
+    }
+
+    if (event.target.id === "ticketModal") {
+      closeTicketModal();
+    }
+  });
+
+  document.addEventListener("submit", (event) => {
+    if (event.target.id === "ticketForm") {
+      event.preventDefault();
+      submitTicketForm();
+    }
+
+    if (event.target.id === "addPersonnelForm") {
+      event.preventDefault();
+
+      const nameInput = document.getElementById("personnelNameInput");
+      const roleInput = document.getElementById("personnelRoleInput");
+
+      addPersonnel(nameInput.value.trim(), roleInput.value);
+
+      nameInput.value = "";
+      roleInput.value = "";
+    }
+  });
+
+  document.addEventListener("change", (event) => {
+    const assignSelect = event.target.closest(".assign-select");
+
+    if (assignSelect) {
+      assignTicketTo(assignSelect.dataset.id, assignSelect.value);
+    }
+
+    if (event.target.id === "priorityFilter" || event.target.id === "statusFilter") {
+      renderTickets();
+    }
+  });
+
+  document.addEventListener("input", (event) => {
+    if (event.target.id === "searchInput") {
+      renderTickets();
+    }
+  });
+
+  if (newTicketButton) {
+    newTicketButton.addEventListener("click", () => {
+      currentView = "submit";
+      renderApp();
+
+      const titleInput = document.getElementById("titleInput");
+
+      if (titleInput) {
+        titleInput.focus();
       }
     });
-  });
+  }
 
-  searchInput.addEventListener("input", renderTickets);
-  priorityFilter.addEventListener("change", renderTickets);
-  statusFilter.addEventListener("change", renderTickets);
+  if (clearFormButton) {
+    clearFormButton.addEventListener("click", () => {
+      const form = document.getElementById("ticketForm");
 
-  newTicketButton.addEventListener("click", () => {
-    currentView = "submit";
-    setActiveNav("submit");
-    renderApp();
-    document.getElementById("titleInput").focus();
-  });
+      if (form) {
+        form.reset();
+      }
 
-  clearFormButton.addEventListener("click", () => {
-    ticketForm.reset();
-    prepareFormForRole();
-    showToast("Ticket form cleared.");
-  });
-
-  resetButton.addEventListener("click", () => {
-    if (!currentUser || currentUser.role !== "admin") {
-      showToast("Only Admin can reset the demo.");
-      return;
-    }
-
-    const confirmed = confirm("Reset all demo tickets, personnel, and activity logs?");
-
-    if (!confirmed) {
-      return;
-    }
-
-    tickets = starterTickets.map(normalizeTicket);
-    personnel = starterPersonnel.map((member) => ({ ...member }));
-    activities = [...starterActivities];
-
-    saveTickets();
-    savePersonnel();
-    saveActivities();
-
-    currentView = "dashboard";
-    setActiveNav("dashboard");
-    renderApp();
-    showToast("Demo data reset.");
-  });
-
-  ticketForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-
-    const now = formatDateTime(new Date());
-    const requesterName = document.getElementById("requesterInput").value.trim();
-
-    const newTicket = normalizeTicket({
-      id: createTicketId(),
-      title: document.getElementById("titleInput").value.trim(),
-      requester: requesterName,
-      submittedBy: requesterName,
-      department: document.getElementById("departmentInput").value,
-      category: document.getElementById("categoryInput").value,
-      priority: document.getElementById("priorityInput").value,
-      status: "Open",
-      assignedTo: "Unassigned",
-      description: document.getElementById("descriptionInput").value.trim(),
-      createdAt: now,
-      updatedAt: now,
-      notes: [],
-      timeline: [
-        {
-          text: `Ticket created by ${requesterName}`,
-          at: now
-        }
-      ]
+      prepareFormForRole();
+      showToast("Ticket form cleared.");
     });
+  }
 
-    tickets.unshift(newTicket);
-    addActivity(`${newTicket.id} created by ${newTicket.requester}`);
+  if (resetButton) {
+    resetButton.addEventListener("click", () => {
+      if (!currentUser || currentUser.role !== "admin") {
+        showToast("Only Admin can reset the demo.");
+        return;
+      }
 
-    saveTickets();
-    saveActivities();
+      const confirmed = confirm("Reset all demo tickets, personnel, and activity logs?");
 
-    ticketForm.reset();
-    prepareFormForRole();
+      if (!confirmed) {
+        return;
+      }
 
-    currentView = currentUser.role === "requester" ? "mine" : "all";
-    setActiveNav(currentView);
+      tickets = starterTickets.map(normalizeTicket);
+      personnel = starterPersonnel.map(normalizePersonnel);
+      activities = [...starterActivities];
 
-    renderApp();
-    showToast(`${newTicket.id} submitted successfully.`);
-  });
+      saveTickets();
+      savePersonnel();
+      saveActivities();
 
-  ticketTableBody.addEventListener("click", (event) => {
-    const button = event.target.closest("button");
-
-    if (!button) {
-      return;
-    }
-
-    const ticketId = button.dataset.id;
-    const action = button.dataset.action;
-
-    if (action === "view") {
-      openTicketModal(ticketId);
-    }
-
-    if (action === "claim") {
-      claimTicket(ticketId);
-    }
-
-    if (action === "progress") {
-      updateTicketStatus(ticketId, "In Progress");
-    }
-
-    if (action === "resolve") {
-      updateTicketStatus(ticketId, "Resolved");
-    }
-
-    if (action === "cancel") {
-      cancelTicket(ticketId);
-    }
-
-    if (action === "delete") {
-      deleteTicket(ticketId);
-    }
-  });
-
-  ticketTableBody.addEventListener("change", (event) => {
-    const select = event.target.closest(".assign-select");
-
-    if (!select) {
-      return;
-    }
-
-    assignTicketTo(select.dataset.id, select.value);
-  });
-
-  quickButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      const type = button.dataset.quick;
-
-      const quickData = {
-        outage: {
-          title: "System outage reported",
-          category: "Network",
-          priority: "High",
-          description: "System outage affecting multiple users."
-        },
-        access: {
-          title: "Access request needed",
-          category: "Account Access",
-          priority: "Medium",
-          description: "User needs access to a work system or shared resource."
-        },
-        hardware: {
-          title: "Hardware request",
-          category: "Hardware",
-          priority: "Medium",
-          description: "User needs help with a laptop, monitor, dock, or other hardware."
-        },
-        software: {
-          title: "Software installation request",
-          category: "Software",
-          priority: "Low",
-          description: "User needs approved software installed or updated."
-        }
-      };
-
-      const selected = quickData[type];
-
-      currentView = "submit";
-      setActiveNav("submit");
+      currentView = "dashboard";
       renderApp();
-
-      document.getElementById("titleInput").value = selected.title;
-      document.getElementById("categoryInput").value = selected.category;
-      document.getElementById("priorityInput").value = selected.priority;
-      document.getElementById("descriptionInput").value = selected.description;
-
-      document.getElementById("requesterInput").focus();
-      showToast("Quick action loaded into the ticket form.");
+      showToast("Demo data reset.");
     });
-  });
+  }
 }
 
 function renderApp() {
+  try {
+    if (!currentUser) {
+      showLogin();
+      return;
+    }
+
+    if (!canAccessView(currentView)) {
+      currentView = getDefaultView(currentUser.role);
+    }
+
+    renderRoleText();
+    renderRoleNavigation();
+    renderLayout();
+    renderStats();
+    renderTickets();
+    renderTeam();
+    renderUnassigned();
+    renderActivities();
+    renderAdminPanel();
+    prepareFormForRole();
+    updateRoleControls();
+  } catch (error) {
+    console.error("BugFlow OS render error:", error);
+    showToast("Something failed to load. Resetting the demo view.");
+    currentView = getDefaultView(currentUser.role);
+    renderLayoutOnly();
+  }
+}
+
+function renderLayoutOnly() {
   if (!currentUser) {
     showLogin();
     return;
   }
 
-  setRoleNavigation();
-  renderRoleText();
-  renderLayout();
-  renderStats();
-  renderTickets();
-  renderTeam();
-  renderUnassigned();
-  renderActivities();
-  renderAdminPanel();
-  prepareFormForRole();
-  updateRoleControls();
+  showApp();
+
+  safeDisplay(statsGrid, currentView === "submit" || currentView === "admin" ? "none" : "grid");
+  safeDisplay(dashboardGrid, currentView === "submit" || currentView === "admin" ? "none" : "grid");
+  safeDisplay(submitSection, currentView === "submit" ? "block" : "none");
+
+  const adminSection = document.getElementById("adminSection");
+  safeDisplay(adminSection, currentView === "admin" ? "block" : "none");
 }
 
 function renderLayout() {
   const isSubmitView = currentView === "submit";
   const isAdminView = currentView === "admin";
 
-  statsGrid.style.display = isSubmitView || isAdminView ? "none" : "grid";
-  dashboardGrid.style.display = isSubmitView || isAdminView ? "none" : "grid";
-  submitSection.style.display = isSubmitView ? "block" : "none";
+  safeDisplay(statsGrid, isSubmitView || isAdminView ? "none" : "grid");
+  safeDisplay(dashboardGrid, isSubmitView || isAdminView ? "none" : "grid");
+  safeDisplay(submitSection, isSubmitView ? "block" : "none");
 
   const adminSection = document.getElementById("adminSection");
-  adminSection.style.display = isAdminView ? "block" : "none";
+  safeDisplay(adminSection, isAdminView ? "block" : "none");
 
-  rightColumn.style.display = currentUser.role === "requester" ? "none" : "grid";
-  resetButton.style.display = currentUser.role === "admin" ? "inline-flex" : "none";
+  safeDisplay(rightColumn, currentUser.role === "requester" ? "none" : "grid");
+
+  if (resetButton) {
+    resetButton.style.display = currentUser.role === "admin" ? "inline-flex" : "none";
+  }
 
   if (panelActions) {
     panelActions.style.display = "flex";
@@ -557,61 +573,76 @@ function renderRoleText() {
 
   const active = roleText[currentUser.role];
 
-  topbarEyebrow.textContent = active.eyebrow;
-  topbarTitle.textContent = active.title;
-
-  if (helperText) {
-    helperText.textContent = active.helper;
-  }
+  safeText(topbarEyebrow, active.eyebrow);
+  safeText(topbarTitle, active.title);
+  safeText(helperText, active.helper);
 
   if (teamPillSmall) {
     teamPillSmall.textContent = `${personnel.length} members online`;
   }
 
-  newTicketButton.textContent = currentUser.role === "requester" ? "＋ Submit Ticket" : "＋ New Ticket";
-
-  if (visibilityCard) {
-    if (currentUser.role === "requester") {
-      visibilityCard.innerHTML = `
-        <strong>User Portal</strong>
-        <span>SUBMIT & TRACK</span>
-        <p>You only see tickets submitted under this user login.</p>
-      `;
-    }
-
-    if (currentUser.role === "staff") {
-      visibilityCard.innerHTML = `
-        <strong>IT Staff View</strong>
-        <span>QUEUE ACCESS</span>
-        <p>Staff can claim work, update tickets, and resolve issues.</p>
-      `;
-    }
-
-    if (currentUser.role === "admin") {
-      visibilityCard.innerHTML = `
-        <strong>Admin Access</strong>
-        <span>FULL CONTROL</span>
-        <p>Admins can assign tickets and manage IT personnel.</p>
-      `;
-    }
+  if (newTicketButton) {
+    newTicketButton.textContent = currentUser.role === "requester" ? "＋ Submit Ticket" : "＋ New Ticket";
   }
+
+  if (!visibilityCard) {
+    return;
+  }
+
+  if (currentUser.role === "requester") {
+    visibilityCard.innerHTML = `
+      <strong>User Portal</strong>
+      <span>SUBMIT & TRACK</span>
+      <p>You only see tickets submitted under this user login.</p>
+    `;
+  }
+
+  if (currentUser.role === "staff") {
+    visibilityCard.innerHTML = `
+      <strong>IT Staff View</strong>
+      <span>QUEUE ACCESS</span>
+      <p>Staff can claim work, update tickets, and resolve issues.</p>
+    `;
+  }
+
+  if (currentUser.role === "admin") {
+    visibilityCard.innerHTML = `
+      <strong>Admin Access</strong>
+      <span>FULL CONTROL</span>
+      <p>Admins can assign tickets and manage IT personnel.</p>
+    `;
+  }
+}
+
+function renderRoleNavigation() {
+  const navLinks = document.querySelectorAll(".nav-link");
+
+  navLinks.forEach((link) => {
+    const view = link.dataset.view;
+    link.style.display = canAccessView(view) ? "flex" : "none";
+    link.classList.toggle("active", view === currentView);
+  });
 }
 
 function renderStats() {
   const visibleTickets = getVisibleTicketsForRole();
 
-  totalTickets.textContent = visibleTickets.length;
-  openTickets.textContent = visibleTickets.filter((ticket) => ticket.status === "Open").length;
-  criticalTickets.textContent = visibleTickets.filter((ticket) => ticket.priority === "High").length;
-  progressTickets.textContent = visibleTickets.filter((ticket) => ticket.status === "In Progress").length;
-  resolvedTickets.textContent = visibleTickets.filter((ticket) => ticket.status === "Resolved").length;
+  safeText(totalTickets, visibleTickets.length);
+  safeText(openTickets, visibleTickets.filter((ticket) => ticket.status === "Open").length);
+  safeText(criticalTickets, visibleTickets.filter((ticket) => ticket.priority === "High").length);
+  safeText(progressTickets, visibleTickets.filter((ticket) => ticket.status === "In Progress").length);
+  safeText(resolvedTickets, visibleTickets.filter((ticket) => ticket.status === "Resolved").length);
 }
 
 function renderTickets() {
+  if (!ticketTableBody) {
+    return;
+  }
+
   const filteredTickets = getFilteredTickets();
 
   ticketTableBody.innerHTML = "";
-  ticketsTitle.textContent = getViewTitle();
+  safeText(ticketsTitle, getViewTitle());
 
   if (filteredTickets.length === 0) {
     ticketTableBody.innerHTML = `
@@ -624,7 +655,7 @@ function renderTickets() {
       </tr>
     `;
 
-    ticketCountText.textContent = "Showing 0 tickets";
+    safeText(ticketCountText, "Showing 0 tickets");
     return;
   }
 
@@ -671,7 +702,7 @@ function renderTickets() {
     ticketTableBody.appendChild(row);
   });
 
-  ticketCountText.textContent = `Showing ${filteredTickets.length} of ${getVisibleTicketsForRole().length} visible tickets`;
+  safeText(ticketCountText, `Showing ${filteredTickets.length} of ${getVisibleTicketsForRole().length} visible tickets`);
 }
 
 function renderAssignedCell(ticket) {
@@ -774,97 +805,11 @@ function renderTicketActions(ticket) {
   return actions.join("");
 }
 
-function getFilteredTickets() {
-  const searchTerm = searchInput.value.toLowerCase().trim();
-  const selectedPriority = priorityFilter.value;
-  const selectedStatus = statusFilter.value;
-
-  return getVisibleTicketsForRole().filter((ticket) => {
-    const matchesSearch = `
-      ${ticket.id}
-      ${ticket.title}
-      ${ticket.requester}
-      ${ticket.submittedBy}
-      ${ticket.department}
-      ${ticket.category}
-      ${ticket.priority}
-      ${ticket.status}
-      ${ticket.assignedTo}
-      ${ticket.description}
-    `
-      .toLowerCase()
-      .includes(searchTerm);
-
-    const matchesPriority = selectedPriority === "all" || ticket.priority === selectedPriority;
-    const matchesStatus = selectedStatus === "all" || ticket.status === selectedStatus;
-    const matchesView = getViewMatch(ticket);
-
-    return matchesSearch && matchesPriority && matchesStatus && matchesView;
-  });
-}
-
-function getVisibleTicketsForRole() {
-  if (!currentUser) {
-    return [];
-  }
-
-  if (currentUser.role === "requester") {
-    return tickets.filter((ticket) => ticket.submittedBy === currentUser.name || ticket.requester === currentUser.name);
-  }
-
-  return tickets;
-}
-
-function getViewMatch(ticket) {
-  if (currentView === "dashboard" || currentView === "all" || currentView === "submit") {
-    return true;
-  }
-
-  if (currentView === "mine" || currentView === "assigned") {
-    if (currentUser.role === "requester") {
-      return ticket.submittedBy === currentUser.name || ticket.requester === currentUser.name;
-    }
-
-    return ticket.assignedTo === currentUser.name;
-  }
-
-  if (currentView === "queue") {
-    return ticket.assignedTo === "Unassigned";
-  }
-
-  if (currentView === "progress") {
-    return ticket.status === "In Progress";
-  }
-
-  if (currentView === "resolved") {
-    return ticket.status === "Resolved";
-  }
-
-  if (currentView === "knowledge") {
-    return ticket.category === "Software" || ticket.category === "Account Access" || ticket.category === "Network";
-  }
-
-  return true;
-}
-
-function getViewTitle() {
-  const titles = {
-    dashboard: currentUser.role === "requester" ? "My Tickets" : "All IT Tickets",
-    submit: "Submit Ticket",
-    all: "All IT Tickets",
-    mine: currentUser.role === "requester" ? "My Submitted Tickets" : "My Tickets",
-    queue: "Team Queue",
-    assigned: "Assigned to Me",
-    progress: "In Progress Tickets",
-    resolved: "Resolved Tickets",
-    knowledge: "Knowledge Base Related Tickets",
-    admin: "Admin Controls"
-  };
-
-  return titles[currentView] || "All IT Tickets";
-}
-
 function renderTeam() {
+  if (!teamList) {
+    return;
+  }
+
   teamList.innerHTML = "";
 
   personnel.forEach((member) => {
@@ -884,6 +829,10 @@ function renderTeam() {
 }
 
 function renderUnassigned() {
+  if (!unassignedList || !unassignedCount) {
+    return;
+  }
+
   const unassignedTickets = tickets.filter((ticket) => ticket.assignedTo === "Unassigned");
 
   unassignedCount.textContent = unassignedTickets.length;
@@ -918,6 +867,10 @@ function renderUnassigned() {
 }
 
 function renderActivities() {
+  if (!activityList) {
+    return;
+  }
+
   activityList.innerHTML = "";
 
   activities.slice(0, 6).forEach((activity, index) => {
@@ -1057,30 +1010,6 @@ function renderAdminPanel() {
       </section>
     </div>
   `;
-
-  document.getElementById("adminBackButton").addEventListener("click", () => {
-    currentView = "dashboard";
-    setActiveNav("dashboard");
-    renderApp();
-  });
-
-  document.getElementById("addPersonnelForm").addEventListener("submit", (event) => {
-    event.preventDefault();
-
-    const nameInput = document.getElementById("personnelNameInput");
-    const roleInput = document.getElementById("personnelRoleInput");
-
-    addPersonnel(nameInput.value.trim(), roleInput.value);
-
-    nameInput.value = "";
-    roleInput.value = "";
-  });
-
-  adminSection.querySelectorAll("[data-remove-personnel]").forEach((button) => {
-    button.addEventListener("click", () => {
-      removePersonnel(button.dataset.removePersonnel);
-    });
-  });
 }
 
 function renderRemovePersonnelButton(member) {
@@ -1095,12 +1024,240 @@ function renderRemovePersonnelButton(member) {
   `;
 }
 
+function submitTicketForm() {
+  const titleInput = document.getElementById("titleInput");
+  const requesterInput = document.getElementById("requesterInput");
+  const departmentInput = document.getElementById("departmentInput");
+  const categoryInput = document.getElementById("categoryInput");
+  const priorityInput = document.getElementById("priorityInput");
+  const descriptionInput = document.getElementById("descriptionInput");
+
+  if (!titleInput || !requesterInput || !departmentInput || !categoryInput || !priorityInput || !descriptionInput) {
+    showToast("Ticket form is missing a field.");
+    return;
+  }
+
+  const now = formatDateTime(new Date());
+  const requesterName = requesterInput.value.trim();
+
+  const newTicket = normalizeTicket({
+    id: createTicketId(),
+    title: titleInput.value.trim(),
+    requester: requesterName,
+    submittedBy: requesterName,
+    department: departmentInput.value,
+    category: categoryInput.value,
+    priority: priorityInput.value,
+    status: "Open",
+    assignedTo: "Unassigned",
+    description: descriptionInput.value.trim(),
+    createdAt: now,
+    updatedAt: now,
+    notes: [],
+    timeline: [
+      {
+        text: `Ticket created by ${requesterName}`,
+        at: now
+      }
+    ]
+  });
+
+  tickets.unshift(newTicket);
+  addActivity(`${newTicket.id} created by ${newTicket.requester}`);
+
+  saveTickets();
+  saveActivities();
+
+  const form = document.getElementById("ticketForm");
+
+  if (form) {
+    form.reset();
+  }
+
+  currentView = currentUser.role === "requester" ? "mine" : "all";
+
+  renderApp();
+  showToast(`${newTicket.id} submitted successfully.`);
+}
+
+function handleTicketAction(button) {
+  const ticketId = button.dataset.id;
+  const action = button.dataset.action;
+
+  if (action === "view") {
+    openTicketModal(ticketId);
+  }
+
+  if (action === "claim") {
+    claimTicket(ticketId);
+  }
+
+  if (action === "progress") {
+    updateTicketStatus(ticketId, "In Progress");
+  }
+
+  if (action === "resolve") {
+    updateTicketStatus(ticketId, "Resolved");
+  }
+
+  if (action === "cancel") {
+    cancelTicket(ticketId);
+  }
+
+  if (action === "delete") {
+    deleteTicket(ticketId);
+  }
+}
+
+function loadQuickAction(type) {
+  const quickData = {
+    outage: {
+      title: "System outage reported",
+      category: "Network",
+      priority: "High",
+      description: "System outage affecting multiple users."
+    },
+    access: {
+      title: "Access request needed",
+      category: "Account Access",
+      priority: "Medium",
+      description: "User needs access to a work system or shared resource."
+    },
+    hardware: {
+      title: "Hardware request",
+      category: "Hardware",
+      priority: "Medium",
+      description: "User needs help with a laptop, monitor, dock, or other hardware."
+    },
+    software: {
+      title: "Software installation request",
+      category: "Software",
+      priority: "Low",
+      description: "User needs approved software installed or updated."
+    }
+  };
+
+  const selected = quickData[type];
+
+  if (!selected) {
+    return;
+  }
+
+  currentView = "submit";
+  renderApp();
+
+  safeSetValue(document.getElementById("titleInput"), selected.title);
+  safeSetValue(document.getElementById("categoryInput"), selected.category);
+  safeSetValue(document.getElementById("priorityInput"), selected.priority);
+  safeSetValue(document.getElementById("descriptionInput"), selected.description);
+
+  const requesterInput = document.getElementById("requesterInput");
+
+  if (requesterInput && !requesterInput.disabled) {
+    requesterInput.focus();
+  }
+
+  showToast("Quick action loaded into the ticket form.");
+}
+
+function getFilteredTickets() {
+  const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : "";
+  const selectedPriority = priorityFilter ? priorityFilter.value : "all";
+  const selectedStatus = statusFilter ? statusFilter.value : "all";
+
+  return getVisibleTicketsForRole().filter((ticket) => {
+    const searchBlob = `
+      ${ticket.id}
+      ${ticket.title}
+      ${ticket.requester}
+      ${ticket.submittedBy}
+      ${ticket.department}
+      ${ticket.category}
+      ${ticket.priority}
+      ${ticket.status}
+      ${ticket.assignedTo}
+      ${ticket.description}
+    `.toLowerCase();
+
+    const matchesSearch = searchBlob.includes(searchTerm);
+    const matchesPriority = selectedPriority === "all" || ticket.priority === selectedPriority;
+    const matchesStatus = selectedStatus === "all" || ticket.status === selectedStatus;
+    const matchesView = getViewMatch(ticket);
+
+    return matchesSearch && matchesPriority && matchesStatus && matchesView;
+  });
+}
+
+function getVisibleTicketsForRole() {
+  if (!currentUser) {
+    return [];
+  }
+
+  if (currentUser.role === "requester") {
+    return tickets.filter((ticket) => ticket.submittedBy === currentUser.name || ticket.requester === currentUser.name);
+  }
+
+  return tickets;
+}
+
+function getViewMatch(ticket) {
+  if (currentView === "dashboard" || currentView === "all" || currentView === "submit") {
+    return true;
+  }
+
+  if (currentView === "mine" || currentView === "assigned") {
+    if (currentUser.role === "requester") {
+      return ticket.submittedBy === currentUser.name || ticket.requester === currentUser.name;
+    }
+
+    return ticket.assignedTo === currentUser.name;
+  }
+
+  if (currentView === "queue") {
+    return ticket.assignedTo === "Unassigned";
+  }
+
+  if (currentView === "progress") {
+    return ticket.status === "In Progress";
+  }
+
+  if (currentView === "resolved") {
+    return ticket.status === "Resolved";
+  }
+
+  if (currentView === "knowledge") {
+    return ticket.category === "Software" || ticket.category === "Account Access" || ticket.category === "Network";
+  }
+
+  return true;
+}
+
+function getViewTitle() {
+  const titles = {
+    dashboard: currentUser.role === "requester" ? "My Tickets" : "All IT Tickets",
+    submit: "Submit Ticket",
+    all: "All IT Tickets",
+    mine: currentUser.role === "requester" ? "My Submitted Tickets" : "My Tickets",
+    queue: "Team Queue",
+    assigned: "Assigned to Me",
+    progress: "In Progress Tickets",
+    resolved: "Resolved Tickets",
+    knowledge: "Knowledge Base Related Tickets",
+    admin: "Admin Controls"
+  };
+
+  return titles[currentView] || "All IT Tickets";
+}
+
 function openTicketModal(ticketId) {
   activeTicketId = ticketId;
   renderTicketModal();
 
   const modal = document.getElementById("ticketModal");
-  modal.classList.add("show");
+
+  if (modal) {
+    modal.classList.add("show");
+  }
 }
 
 function closeTicketModal() {
@@ -1117,7 +1274,7 @@ function renderTicketModal() {
   const modal = document.getElementById("ticketModal");
   const ticket = tickets.find((item) => item.id === activeTicketId);
 
-  if (!ticket) {
+  if (!modal || !ticket) {
     return;
   }
 
@@ -1189,9 +1346,6 @@ function renderTicketModal() {
       </div>
     </div>
   `;
-
-  document.getElementById("closeTicketModal").addEventListener("click", closeTicketModal);
-  document.getElementById("addTicketNoteButton").addEventListener("click", addTicketNote);
 }
 
 function renderNotes(ticket) {
@@ -1255,7 +1409,7 @@ function addTicketNote() {
   const ticket = tickets.find((item) => item.id === activeTicketId);
   const noteInput = document.getElementById("ticketNoteInput");
 
-  if (!ticket || !noteInput.value.trim()) {
+  if (!ticket || !noteInput || !noteInput.value.trim()) {
     showToast("Write a note first.");
     return;
   }
@@ -1428,13 +1582,13 @@ function addPersonnel(name, role) {
     return;
   }
 
-  const newMember = {
+  const newMember = normalizePersonnel({
     id: `P-${Date.now()}`,
     name,
     role,
     initials: getInitials(name),
     status: "Online"
-  };
+  });
 
   personnel.push(newMember);
   addActivity(`${name} added to IT personnel`);
@@ -1489,7 +1643,7 @@ function prepareFormForRole() {
   const requesterInput = document.getElementById("requesterInput");
   const departmentInput = document.getElementById("departmentInput");
 
-  if (!currentUser) {
+  if (!currentUser || !requesterInput || !departmentInput) {
     return;
   }
 
@@ -1516,20 +1670,7 @@ function canAccessView(view) {
     admin: ["dashboard", "all", "queue", "assigned", "progress", "resolved", "knowledge", "submit", "admin"]
   };
 
-  return roleViews[currentUser.role].includes(view);
-}
-
-function setRoleNavigation() {
-  navLinks.forEach((link) => {
-    const view = link.dataset.view;
-    link.style.display = canAccessView(view) ? "flex" : "none";
-  });
-
-  if (!canAccessView(currentView)) {
-    currentView = getDefaultView(currentUser.role);
-  }
-
-  setActiveNav(currentView);
+  return roleViews[currentUser.role] && roleViews[currentUser.role].includes(view);
 }
 
 function getDefaultView(role) {
@@ -1541,7 +1682,14 @@ function getDefaultView(role) {
 }
 
 function loginAs(roleKey) {
-  currentUser = { ...demoAccounts[roleKey] };
+  const selectedAccount = demoAccounts[roleKey];
+
+  if (!selectedAccount) {
+    showToast("Login role not found.");
+    return;
+  }
+
+  currentUser = { ...selectedAccount };
   currentView = getDefaultView(currentUser.role);
 
   localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(currentUser));
@@ -1563,19 +1711,31 @@ function logout() {
 }
 
 function showLogin() {
-  app.style.display = "none";
+  if (app) {
+    app.style.display = "none";
+  }
+
   document.body.classList.add("login-active");
 
   const loginScreen = document.getElementById("loginScreen");
-  loginScreen.style.display = "grid";
+
+  if (loginScreen) {
+    loginScreen.style.display = "grid";
+  }
 }
 
 function showApp() {
-  app.style.display = "grid";
+  if (app) {
+    app.style.display = "grid";
+  }
+
   document.body.classList.remove("login-active");
 
   const loginScreen = document.getElementById("loginScreen");
-  loginScreen.style.display = "none";
+
+  if (loginScreen) {
+    loginScreen.style.display = "none";
+  }
 }
 
 function ensureLoginScreen() {
@@ -1632,14 +1792,6 @@ function ensureLoginScreen() {
 
     document.body.prepend(loginScreen);
   }
-
-  const demoButtons = loginScreen.querySelectorAll("[data-login-role]");
-
-  demoButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      loginAs(button.dataset.loginRole);
-    });
-  });
 }
 
 function ensureRoleControls() {
@@ -1648,6 +1800,10 @@ function ensureRoleControls() {
   }
 
   const topbar = document.querySelector(".topbar");
+
+  if (!topbar) {
+    return;
+  }
 
   const roleControls = document.createElement("div");
   roleControls.id = "roleControls";
@@ -1668,10 +1824,6 @@ function ensureRoleControls() {
   `;
 
   topbar.appendChild(roleControls);
-
-  document.getElementById("logoutButton").addEventListener("click", logout);
-
-  updateRoleControls();
 }
 
 function updateRoleControls() {
@@ -1679,20 +1831,16 @@ function updateRoleControls() {
     return;
   }
 
-  const roleInitials = document.getElementById("roleInitials");
-  const roleName = document.getElementById("roleName");
-  const roleLabel = document.getElementById("roleLabel");
-
-  if (!roleInitials || !roleName || !roleLabel) {
-    return;
-  }
-
-  roleInitials.textContent = currentUser.initials;
-  roleName.textContent = currentUser.name;
-  roleLabel.textContent = `${currentUser.roleLabel} • ${currentUser.title}`;
+  safeText(document.getElementById("roleInitials"), currentUser.initials);
+  safeText(document.getElementById("roleName"), currentUser.name);
+  safeText(document.getElementById("roleLabel"), `${currentUser.roleLabel} • ${currentUser.title}`);
 }
 
 function ensureAdminNavButton() {
+  if (!navMenu) {
+    return;
+  }
+
   const existingButton = document.querySelector('[data-view="admin"]');
 
   if (existingButton) {
@@ -1717,12 +1865,18 @@ function ensureAdminSection() {
     return;
   }
 
+  const mainContent = document.querySelector(".main-content");
+
+  if (!mainContent) {
+    return;
+  }
+
   const adminSection = document.createElement("section");
   adminSection.id = "adminSection";
   adminSection.className = "submit-panel";
   adminSection.style.display = "none";
 
-  document.querySelector(".main-content").appendChild(adminSection);
+  mainContent.appendChild(adminSection);
 }
 
 function ensureTicketModal() {
@@ -1735,12 +1889,6 @@ function ensureTicketModal() {
   modal.className = "ticket-modal";
 
   document.body.appendChild(modal);
-
-  modal.addEventListener("click", (event) => {
-    if (event.target.id === "ticketModal") {
-      closeTicketModal();
-    }
-  });
 }
 
 function injectExtraStyles() {
@@ -1907,11 +2055,6 @@ function injectExtraStyles() {
       outline: none;
       color: var(--text);
       background: rgba(0, 0, 0, 0.32);
-    }
-
-    .table-select:focus {
-      border-color: var(--green);
-      box-shadow: 0 0 0 3px rgba(88, 255, 77, 0.08);
     }
 
     .admin-grid {
@@ -2086,6 +2229,28 @@ function injectExtraStyles() {
       resize: vertical;
     }
 
+    .recovery-card {
+      max-width: 680px;
+      margin: 80px auto;
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      background: var(--panel);
+      padding: 24px;
+      color: var(--text);
+      box-shadow: var(--shadow);
+    }
+
+    .recovery-card h2 {
+      color: var(--green);
+      margin-bottom: 10px;
+    }
+
+    .recovery-card p {
+      color: var(--muted);
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+
     @media (max-width: 1250px) {
       .role-controls {
         grid-column: span 2;
@@ -2130,10 +2295,30 @@ function injectExtraStyles() {
   document.head.appendChild(style);
 }
 
-function setActiveNav(view) {
-  navLinks.forEach((link) => {
-    link.classList.toggle("active", link.dataset.view === view);
-  });
+function forceRecoveryScreen() {
+  document.body.innerHTML = `
+    <div class="recovery-card">
+      <h2>BugFlow OS Recovery Mode</h2>
+      <p>
+        The app hit a startup error, usually from old saved browser data or a missing HTML element.
+      </p>
+      <button id="recoveryResetButton" class="primary-button" type="button">
+        Clear Saved Demo Data
+      </button>
+    </div>
+  `;
+
+  const button = document.getElementById("recoveryResetButton");
+
+  if (button) {
+    button.addEventListener("click", () => {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(PERSONNEL_STORAGE_KEY);
+      localStorage.removeItem(ACTIVITY_STORAGE_KEY);
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+      window.location.reload();
+    });
+  }
 }
 
 function createTicketId() {
@@ -2180,7 +2365,7 @@ function getStatusClass(status) {
 }
 
 function getInitials(name) {
-  return name
+  return String(name)
     .split(" ")
     .filter(Boolean)
     .map((part) => part[0])
@@ -2191,17 +2376,37 @@ function getInitials(name) {
 
 function normalizeTicket(ticket) {
   return {
-    ...ticket,
-    submittedBy: ticket.submittedBy || ticket.requester,
+    id: ticket.id || createTicketId(),
+    title: ticket.title || "Untitled ticket",
+    requester: ticket.requester || "Unknown Requester",
+    submittedBy: ticket.submittedBy || ticket.requester || "Unknown Requester",
+    department: ticket.department || "IT",
+    category: ticket.category || "Other",
+    priority: ticket.priority || "Medium",
+    status: ticket.status || "Open",
+    assignedTo: ticket.assignedTo || "Unassigned",
+    description: ticket.description || "No description provided.",
+    createdAt: ticket.createdAt || formatDateTime(new Date()),
+    updatedAt: ticket.updatedAt || formatDateTime(new Date()),
     notes: Array.isArray(ticket.notes) ? ticket.notes : [],
     timeline: Array.isArray(ticket.timeline)
       ? ticket.timeline
       : [
           {
-            text: `Ticket created by ${ticket.requester}`,
-            at: ticket.createdAt
+            text: `Ticket created by ${ticket.requester || "Unknown Requester"}`,
+            at: ticket.createdAt || formatDateTime(new Date())
           }
         ]
+  };
+}
+
+function normalizePersonnel(member) {
+  return {
+    id: member.id || `P-${Date.now()}`,
+    name: member.name || "Unnamed Staff",
+    role: member.role || "IT Technician",
+    initials: member.initials || getInitials(member.name || "Unnamed Staff"),
+    status: member.status || "Online"
   };
 }
 
@@ -2233,14 +2438,14 @@ function loadPersonnel() {
   const savedPersonnel = localStorage.getItem(PERSONNEL_STORAGE_KEY);
 
   if (!savedPersonnel) {
-    return starterPersonnel.map((member) => ({ ...member }));
+    return starterPersonnel.map(normalizePersonnel);
   }
 
   try {
-    return JSON.parse(savedPersonnel);
+    return JSON.parse(savedPersonnel).map(normalizePersonnel);
   } catch (error) {
     console.error("Could not load saved personnel:", error);
-    return starterPersonnel.map((member) => ({ ...member }));
+    return starterPersonnel.map(normalizePersonnel);
   }
 }
 
@@ -2275,7 +2480,13 @@ function loadSession() {
   }
 
   try {
-    return JSON.parse(savedSession);
+    const parsed = JSON.parse(savedSession);
+
+    if (!parsed || !parsed.role || !demoAccounts[parsed.role]) {
+      return null;
+    }
+
+    return parsed;
   } catch (error) {
     console.error("Could not load saved session:", error);
     return null;
@@ -2283,12 +2494,35 @@ function loadSession() {
 }
 
 function showToast(message) {
+  if (!toast) {
+    console.log(message);
+    return;
+  }
+
   toast.textContent = message;
   toast.classList.add("show");
 
   setTimeout(() => {
     toast.classList.remove("show");
   }, 2800);
+}
+
+function safeText(element, value) {
+  if (element) {
+    element.textContent = value;
+  }
+}
+
+function safeDisplay(element, value) {
+  if (element) {
+    element.style.display = value;
+  }
+}
+
+function safeSetValue(element, value) {
+  if (element) {
+    element.value = value;
+  }
 }
 
 function escapeHTML(text) {
